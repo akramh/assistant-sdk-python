@@ -21,6 +21,11 @@ import argparse
 import os.path
 import json
 
+
+import logging
+import aiy.assistant.auth_helpers
+import aiy.voicehat
+
 import google.auth.transport.requests
 import google.oauth2.credentials
 
@@ -31,6 +36,11 @@ from google.assistant.library.file_helpers import existing_file
 
 DEVICE_API_URL = 'https://embeddedassistant.googleapis.com/v1alpha2'
 
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] %(levelname)s:%(name)s:%(message)s"
+)
 
 def process_device_actions(event, device_id):
     if 'inputs' in event.args:
@@ -56,15 +66,21 @@ def process_event(event, device_id):
     Args:
         event(event.Event): The current event to process.
     """
+    status_ui = aiy.voicehat.get_status_ui()
+
     if event.type == EventType.ON_CONVERSATION_TURN_STARTED:
+        status_ui.status('listening')
         print()
 
     print(event)
 
     if (event.type == EventType.ON_CONVERSATION_TURN_FINISHED and
             event.args and not event.args['with_follow_on_turn']):
+        status_ui.status('ready')
         print()
+
     if event.type == EventType.ON_DEVICE_ACTION:
+        status_ui.status('listening')
         for command, params in process_device_actions(event, device_id):
             print('Do command', command, 'with params', str(params))
 
@@ -111,9 +127,11 @@ def main():
                             'credentials.json'
                         ),
                         help='Path to store and read OAuth2 credentials')
+
     parser.add_argument('--device_model_id', type=str,
                         metavar='DEVICE_MODEL_ID', required=True,
                         help='The device model ID registered with Google')
+
     parser.add_argument('--project_id', type=str,
                         metavar='PROJECT_ID', required=False,
                         help=('The project ID used to register'
