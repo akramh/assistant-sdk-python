@@ -18,9 +18,11 @@
 from __future__ import print_function
 
 import argparse
+import sys
 import os.path
 import json
 import threading
+import subprocess
 
 import logging
 import aiy.assistant.auth_helpers
@@ -93,24 +95,58 @@ class MyAssistant(object):
 
 
     def _process_event(self,event, device_id):
+        status_ui = aiy.voicehat.get_status_ui()
 
-      status_ui = aiy.voicehat.get_status_ui()
+        if event.type == EventType.ON_START_FINISHED:
+            """ The Assistant library has finished starting. """
+            status_ui.status('starting')
+            self._can_start_conversation = True
+            aiy.voicehat.get_button().on_press(self._on_button_pressed)
+            if sys.stdout.isatty():
+                print('Say "OK, Google" or press the button, then speak'
+                'Press Ctrl+C to quit...')
 
-      if event.type == EventType.ON_CONVERSATION_TURN_STARTED:
-        status_ui.status('listening')
-        print()
-
-      print(event)
-
-      if (event.type == EventType.ON_CONVERSATION_TURN_FINISHED and
+        elif event.type == EventType.ON_CONVERSATION_TURN_STARTED:
+            status_ui.status('listening')
+            print()
+        
+        elif event.type == EventType.ON_END_OF_UTTERANCE:
+            """The Assistant has stopped listening to a user query.
+            The Assistant may not have finished figuring out what the user 
+            has said but it has stopped listening for more audio data.
+            """
+            status_ui.status('thinking')
+            
+        elif (event.type == EventType.ON_CONVERSATION_TURN_FINISHED and
             event.args and not event.args['with_follow_on_turn']):
-        status_ui.status('ready')
-        print()
+            """ The Assistant finished the current turn.
+            This includes both processing a user’s query and speaking the full response.
+            """
+            status_ui.status('ready')
+            print()
 
-      if event.type == EventType.ON_DEVICE_ACTION:
-        status_ui.status('listening')
-        for command, params in self._process_device_actions(event, device_id):
-            print('Do command', command, 'with params', str(params))
+        elif event.type == EventType.ON_NO_RESPONSE:
+            """The Assistant successfully completed its turn but has nothing to say."""
+            status_ui.start('ready')
+
+        elif event.type == EventType.ON_ASSISTANT_ERROR:
+            """ Indicates if the Assistant library has encountered an error. """
+            status_ui.start('error')
+
+        elif event.type == EventType.ON_CONVERSATION_TURN_TIMEOUT:
+            """The Assistant timed out waiting for a discernable query.
+            This could be caused by a mistrigger of the Hotword or the Assistant 
+            could not understand what the user said.
+            """
+            status_ui.start('ready')
+            
+        elif event.type == EventType.ON_DEVICE_ACTION:
+            status_ui.status('listening')
+            for command, params in self._process_device_actions(event, device_id):
+                print('Do command', command, 'with params', str(params))
+
+        print(event)
+
 
     def _on_button_pressed(self):
         # Check if we can start a conversation. 'self._can_start_conversation'
